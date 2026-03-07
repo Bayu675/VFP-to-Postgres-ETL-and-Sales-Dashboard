@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. HEADER TRANSAKSI (PKARTSO1.DBF)
+// ==========================================
+model SalesOrder {
+  soNumber       String      @id @map("so_number")     
+  soDate         DateTime    @map("so_date")           
+  customerCode   String      @map("customer_code")     
+  salesmanCode   String?     @map("salesman_code")     
+  notes          String?     @map("notes")             
+  
+  // Use Decimal for exact precision in financial data
+  subTotal       Decimal     @default(0) @map("sub_total") @db.Decimal(15, 2)
+  discountAmount Decimal     @default(0) @map("discount_amt") @db.Decimal(15, 2)
+  taxPercent     Decimal     @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  grandTotal     Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
+
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  items          OrderItem[]
+  customer       Customer    @relation(fields: [customerCode], references: [customerCode], onDelete: Restrict)
+
+  @@map("sales_orders")
+}
+
+// ==========================================
+// 2. DETAIL TRANSAKSI (PKARTSO2.DBF)
+// ==========================================
+model OrderItem {
+  soNumber       String      @map("so_number")         
+  sequence       Int         @map("sequence")          
+  productCode    String      @map("product_code")      
+  
+  qty            Decimal     @default(0) @map("qty") @db.Decimal(12, 2)
+  width          Decimal?    @map("width") @db.Decimal(10, 2)
+  height         Decimal?    @map("height") @db.Decimal(10, 2)
+  area           Decimal?    @map("area") @db.Decimal(12, 4)
+  itemNotes      String?     @map("item_notes")        
+
+  unitPrice      Decimal     @default(0) @map("unit_price") @db.Decimal(15, 2)
+  discount1      Decimal?    @map("discount_1") @db.Decimal(15, 2)
+  discount2      Decimal?    @map("discount_2") @db.Decimal(15, 2)
+  discount3      Decimal?    @map("discount_3") @db.Decimal(15, 2)
+
+  salesOrder     SalesOrder  @relation(fields: [soNumber], references: [soNumber], onDelete: Cascade)
+  product        Product     @relation(fields: [productCode], references: [productCode], onDelete: Restrict)
+
+  // Pure relational design using Composite Key
+  @@id([soNumber, sequence])
+  @@map("order_items")
+}
+
+// ==========================================
+// 3. MASTER BARANG (PKSTFMAS.DBF)
+// ==========================================
+model Product {
+  productCode    String      @id @map("product_code")  
+  name           String      @map("name")              
+  aliasName      String?     @map("alias_name")        
+  unit           String?     @map("unit")              
+  categoryCode   String?     @map("category_code")     
+  
+  basePrice      Decimal?    @map("base_price") @db.Decimal(15, 2)
+  
+  orderItems     OrderItem[]
+
+  @@map("products")
+}
+
+ // ==========================================
+ // 4. MASTER CUSTOMER (PKARFCUS.DBF)
+ // ==========================================
+ model Customer {
+   customerCode   String      @id @map("customer_code")
+   name           String      @map("name")
+   
+   salesOrders    SalesOrder[]
+ 
+   @@map("customers")
+ }
