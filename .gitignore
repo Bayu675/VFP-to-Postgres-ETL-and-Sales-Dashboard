@@ -45,3 +45,7 @@ out/
 # Log files
 logs
 *.log
+
+#any
+repomix-output-etl.xml
+run.bat

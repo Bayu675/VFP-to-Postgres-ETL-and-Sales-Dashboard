@@ -1,0 +1,17 @@
+{
+  "output": {
+    "filePath": "repomix-output-etl.xml",
+    "style": "xml"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "**/.git/**",
+      "data-dropzone/**",
+      "**/*.DBF",
+      "**/*.FPT",
+      "**/package-lock.json",
+      "run.bat"
+    ]
+  }
+}

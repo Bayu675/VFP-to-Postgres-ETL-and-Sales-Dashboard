@@ -8,28 +8,16 @@ import ExcelJS from 'exceljs';
 const etlService = new EtlService();
 const prisma = new PrismaClient();
 
-// Endpoint to trigger ETL Sync based on Date Range
 export const syncSalesOrders = asyncHandler(async (req: Request, res: Response) => {
   const { startDate, endDate } = req.body;
-
-  if (!startDate || !endDate) {
-    throw new AppError('startDate dan endDate wajib dikirim dengan format YYYY-MM-DD', 400);
-  }
-
+  if (!startDate || !endDate) throw new AppError('startDate dan endDate wajib dikirim dengan format YYYY-MM-DD', 400);
   const result = await etlService.syncData(startDate as string, endDate as string);
-
-  res.status(200).json({
-    success: true,
-    data: result
-  });
+  res.status(200).json({ success: true, data: result });
 });
 
-// Endpoint to fetch data for Frontend DataGrid
 export const getSalesOrders = asyncHandler(async (req: Request, res: Response) => {
   const { startDate, endDate } = req.query;
-  
   let whereClause = {};
-  
   if (startDate && endDate && typeof startDate === 'string' && typeof endDate === 'string') {
     whereClause = {
       soDate: {
@@ -38,56 +26,28 @@ export const getSalesOrders = asyncHandler(async (req: Request, res: Response) =
       }
     };
   }
-
   const orders = await prisma.salesOrder.findMany({
     where: whereClause,
-    include: {
-      customer: true,
-      items: { include: { product: true } }
-    },
+    include: { customer: true, items: { include: { product: true } } },
     orderBy: { soDate: 'desc' }
   });
-
-  res.status(200).json({
-    success: true,
-    count: orders.length,
-    data: orders
-  });
+  res.status(200).json({ success: true, count: orders.length, data: orders });
 });
 
-// Endpoint to fetch specific SOs based on Array of SO Numbers (Bulk Search)
 export const getBulkSalesOrders = asyncHandler(async (req: Request, res: Response) => {
   const { soNumbers } = req.body;
-
-  if (!soNumbers || !Array.isArray(soNumbers)) {
-    throw new AppError('soNumbers wajib dikirim dalam bentuk array', 400);
-  }
-
+  if (!soNumbers || !Array.isArray(soNumbers)) throw new AppError('soNumbers wajib dikirim dalam bentuk array', 400);
   const orders = await prisma.salesOrder.findMany({
-    where: {
-      soNumber: { in: soNumbers }
-    },
-    include: {
-      customer: true,
-      items: { include: { product: true } }
-    },
+    where: { soNumber: { in: soNumbers } },
+    include: { customer: true, items: { include: { product: true } } },
     orderBy: { soDate: 'desc' }
   });
-
-  res.status(200).json({
-    success: true,
-    count: orders.length,
-    data: orders
-  });
+  res.status(200).json({ success: true, count: orders.length, data: orders });
 });
 
-// Endpoint to Export Excel directly from Backend
 export const exportSalesOrders = asyncHandler(async (req: Request, res: Response) => {
   const { startDate, endDate } = req.query;
-  
-  if (!startDate || !endDate) {
-    throw new AppError('startDate dan endDate wajib dikirim', 400);
-  }
+  if (!startDate || !endDate) throw new AppError('startDate dan endDate wajib dikirim', 400);
 
   const orders = await prisma.salesOrder.findMany({
     where: {
@@ -96,16 +56,12 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
         lte: new Date(`${endDate}T23:59:59.999Z`)
       }
     },
-    include: {
-      customer: true,
-      items: { include: { product: true } }
-    },
+    include: { customer: true, items: { include: { product: true } } },
     orderBy: { soDate: 'desc' }
   });
 
   const workbook = new ExcelJS.Workbook();
   
-  // 1. SUMMARY SHEET
   const summarySheet = workbook.addWorksheet('Summary SO');
   summarySheet.columns = [
     { header: 'No. SO', key: 'soNumber', width: 15 },
@@ -119,7 +75,6 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
     { header: 'Grand Total', key: 'grandTotal', width: 20 },
   ];
 
-  // 2. DETAIL SHEET
   const detailSheet = workbook.addWorksheet('Detail Item');
   detailSheet.columns = [
     { header: 'No. SO', key: 'soNumber', width: 15 },
@@ -134,16 +89,15 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
     { header: 'Disc-1 (%)', key: 'disc1', width: 15 },
     { header: 'Disc-2 (%)', key: 'disc2', width: 15 },
     { header: 'Disc-3 (%)', key: 'disc3', width: 15 },
+    { header: 'Disc-4 (%)', key: 'disc4', width: 15 },
     { header: '[ Jumlah Net ]', key: 'jumlahNet', width: 20 },
     { header: 'Notes', key: 'itemNotes', width: 30 },
   ];
 
-  // Populate Data
   orders.forEach(order => {
     const customerName = order.customer?.name || order.customerCode;
     const soDateStr = order.soDate.toLocaleDateString('id-ID');
 
-    // Add Summary Row
     summarySheet.addRow({
       soNumber: order.soNumber,
       soDate: soDateStr,
@@ -156,14 +110,28 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
       grandTotal: Number(order.grandTotal),
     });
 
-    // Add Detail Rows
     order.items.forEach(item => {
       const multiplier = (Number(item.area) > 0) ? Number(item.area) : Number(item.qty);
       let netTotal = multiplier * Number(item.unitPrice);
       
-      if (item.discount1) netTotal -= netTotal * (Number(item.discount1) / 100);
-      if (item.discount2) netTotal -= netTotal * (Number(item.discount2) / 100);
-      if (item.discount3) netTotal -= netTotal * (Number(item.discount3) / 100);
+      const isNonDiscountable = item.product?.isJasa || item.product?.outDiskon;
+      
+      let d1 = Number(item.discount1 || 0);
+      let d2 = Number(item.discount2 || 0);
+      let d3 = Number(item.discount3 || 0);
+      let d4 = Number(item.discount4 || 0);
+
+      if (!isNonDiscountable) {
+        if (d1 === 0 && Number(order.headerDisc1) > 0) d1 = Number(order.headerDisc1);
+        if (d2 === 0 && Number(order.headerDisc2) > 0) d2 = Number(order.headerDisc2);
+        if (d3 === 0 && Number(order.headerDisc3) > 0) d3 = Number(order.headerDisc3);
+        if (d4 === 0 && Number(order.headerDisc4) > 0) d4 = Number(order.headerDisc4);
+      }
+      
+      if (d1 > 0) netTotal -= netTotal * (d1 / 100);
+      if (d2 > 0) netTotal -= netTotal * (d2 / 100);
+      if (d3 > 0) netTotal -= netTotal * (d3 / 100);
+      if (d4 > 0) netTotal -= netTotal * (d4 / 100);
 
       detailSheet.addRow({
         soNumber: order.soNumber,
@@ -175,24 +143,22 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
         area: Number(item.area || 0),
         qty: Number(item.qty),
         unitPrice: Number(item.unitPrice),
-        disc1: Number(item.discount1 || 0),
-        disc2: Number(item.discount2 || 0),
-        disc3: Number(item.discount3 || 0),
+        disc1: d1,
+        disc2: d2,
+        disc3: d3,
+        disc4: d4,
         jumlahNet: netTotal,
         itemNotes: item.itemNotes || '-',
       });
     });
   });
 
-  // Make headers bold
   summarySheet.getRow(1).font = { bold: true };
   detailSheet.getRow(1).font = { bold: true };
 
-  // Set Response Headers for File Download
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename=Laporan_SO_${startDate}_sampai_${endDate}.xlsx`);
 
-  // Write to stream
   await workbook.xlsx.write(res);
   res.end();
 });

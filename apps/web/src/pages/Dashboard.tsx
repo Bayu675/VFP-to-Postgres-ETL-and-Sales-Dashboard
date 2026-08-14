@@ -4,9 +4,6 @@ import { GridColDef } from '@mui/x-data-grid';
 import { TableGrid } from '../components/TableGrid';
 import * as XLSX from 'xlsx';
 
-// ---------------------------------------------------------
-// TYPE DEFINITIONS
-// ---------------------------------------------------------
 interface OrderItem {
   soNumber: string;
   sequence: number;
@@ -20,7 +17,12 @@ interface OrderItem {
   discount1: number | null;
   discount2: number | null;
   discount3: number | null;
-  product: { name: string };
+  discount4: number | null;
+  product: { 
+    name: string;
+    isJasa: boolean;
+    outDiskon: boolean;
+  };
 }
 
 interface SalesOrder {
@@ -31,6 +33,11 @@ interface SalesOrder {
   notes: string | null;
   subTotal: number;
   discountAmount: number;
+  discountAmt2: number;
+  headerDisc1: number;
+  headerDisc2: number;
+  headerDisc3: number;
+  headerDisc4: number;
   taxPercent: number;
   grandTotal: number;
   items: OrderItem[];
@@ -52,6 +59,7 @@ interface FlattenedRow {
   disc1: number;
   disc2: number;
   disc3: number;
+  disc4: number;
   jumlahNet: number;
   itemNotes: string;
 }
@@ -69,9 +77,6 @@ interface SummaryRow {
   grandTotal: number;
 }
 
-// ---------------------------------------------------------
-// FORMATTER & DATE UTILS
-// ---------------------------------------------------------
 const formatIDR = (value: number) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(value || 0);
 };
@@ -98,25 +103,19 @@ const getPastDate = (days: number): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-// ---------------------------------------------------------
-// COMPONENT
-// ---------------------------------------------------------
 export const Dashboard = () => {
-  // UI States
   const [activeTab, setActiveTab] = useState<'detail' | 'summary'>('detail');
-  const [viewMode, setViewMode] = useState<'dateRange' | 'bulk'>('dateRange'); // Penanda mode data
+  const [viewMode, setViewMode] = useState<'dateRange' | 'bulk'>('dateRange'); 
   
   const [detailData, setDetailData] = useState<FlattenedRow[]>([]);
   const [summaryData, setSummaryData] = useState<SummaryRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   
-  // Inputs
   const [startDate, setStartDate] = useState<string>(getPastDate(30));
   const [endDate, setEndDate] = useState<string>(getTodayDate());
   const [bulkInput, setBulkInput] = useState<string>('');
 
-  // Columns
   const detailColumns: GridColDef[] = [
     { field: 'soNumber', headerName: 'No. SO', width: 130 },
     { field: 'customerName', headerName: 'Customer', width: 200 },
@@ -129,6 +128,7 @@ export const Dashboard = () => {
     { field: 'disc1', headerName: 'Disc-1', type: 'number', width: 70, valueFormatter: formatPercent },
     { field: 'disc2', headerName: 'Disc-2', type: 'number', width: 70, valueFormatter: formatPercent },
     { field: 'disc3', headerName: 'Disc-3', type: 'number', width: 70, valueFormatter: formatPercent },
+    { field: 'disc4', headerName: 'Disc-4', type: 'number', width: 70, valueFormatter: formatPercent },
     { field: 'jumlahNet', headerName: '[ Jumlah ]', type: 'number', width: 140, valueFormatter: (value) => formatIDR(value as number) },
     { field: 'itemNotes', headerName: 'Notes / Ket', width: 200 },
   ];
@@ -144,16 +144,30 @@ export const Dashboard = () => {
     { field: 'grandTotal', headerName: 'Grand Total', type: 'number', width: 180, valueFormatter: (value) => formatIDR(value as number) },
   ];
 
-  // Helper to map raw API data to DataGrid rows
   const mapDataToRows = (rawData: SalesOrder[]) => {
     const flattenedRows: FlattenedRow[] = rawData.flatMap((order) => 
       order.items.map((item) => {
         const multiplier = (item.area && item.area > 0) ? item.area : item.qty;
         let netTotal = multiplier * Number(item.unitPrice);
         
-        if (item.discount1) netTotal -= netTotal * (Number(item.discount1) / 100);
-        if (item.discount2) netTotal -= netTotal * (Number(item.discount2) / 100);
-        if (item.discount3) netTotal -= netTotal * (Number(item.discount3) / 100);
+        const isNonDiscountable = item.product?.isJasa || item.product?.outDiskon;
+        
+        let d1 = Number(item.discount1 || 0);
+        let d2 = Number(item.discount2 || 0);
+        let d3 = Number(item.discount3 || 0);
+        let d4 = Number(item.discount4 || 0);
+
+        if (!isNonDiscountable) {
+          if (d1 === 0 && Number(order.headerDisc1) > 0) d1 = Number(order.headerDisc1);
+          if (d2 === 0 && Number(order.headerDisc2) > 0) d2 = Number(order.headerDisc2);
+          if (d3 === 0 && Number(order.headerDisc3) > 0) d3 = Number(order.headerDisc3);
+          if (d4 === 0 && Number(order.headerDisc4) > 0) d4 = Number(order.headerDisc4);
+        }
+
+        if (d1 > 0) netTotal -= netTotal * (d1 / 100);
+        if (d2 > 0) netTotal -= netTotal * (d2 / 100);
+        if (d3 > 0) netTotal -= netTotal * (d3 / 100);
+        if (d4 > 0) netTotal -= netTotal * (d4 / 100);
 
         return {
           id: `${order.soNumber}-${item.sequence}`, 
@@ -168,9 +182,10 @@ export const Dashboard = () => {
           height: item.height,
           area: item.area,
           unitPrice: Number(item.unitPrice),
-          disc1: Number(item.discount1 || 0),
-          disc2: Number(item.discount2 || 0),
-          disc3: Number(item.discount3 || 0),
+          disc1: d1,
+          disc2: d2,
+          disc3: d3,
+          disc4: d4,
           jumlahNet: netTotal,
           itemNotes: item.itemNotes || '-',
         };
@@ -194,7 +209,6 @@ export const Dashboard = () => {
     setSummaryData(mappedSummary);
   };
 
-  // 1. Fetch by Date Range
   const fetchSalesOrders = async () => {
     try {
       setLoading(true);
@@ -209,14 +223,12 @@ export const Dashboard = () => {
     }
   };
 
-  // 2. Fetch by Bulk SO Numbers (Paste from Excel)
   const handleBulkSearch = async () => {
     if (!bulkInput.trim()) {
       alert('Silakan paste daftar No. SO terlebih dahulu.');
       return;
     }
 
-    // Split by newline, trim spaces, remove empty lines
     const soArray = bulkInput.split('\n').map(so => so.trim()).filter(so => so !== '');
 
     try {
@@ -265,7 +277,6 @@ export const Dashboard = () => {
     }
   };
 
-  // Export Logic (Conditional based on View Mode)
   const handleExport = () => {
     if (summaryData.length === 0 || detailData.length === 0) {
       alert('Tidak ada data untuk di-export.');
@@ -273,10 +284,8 @@ export const Dashboard = () => {
     }
 
     if (viewMode === 'dateRange') {
-      // Mode Bulanan: Download langsung dari Backend (Aman dari RAM Crash)
       window.open(`http://localhost:3001/api/sales-orders/export?startDate=${startDate}&endDate=${endDate}`, '_blank');
     } else {
-      // Mode Bulk Search: Generate Excel di Frontend (Karena datanya kecil)
       const excelSummary = summaryData.map((row) => ({
         'No. SO': row.soNumber,
         'Tanggal': row.soDate,
@@ -302,6 +311,7 @@ export const Dashboard = () => {
         'Disc-1 (%)': row.disc1,
         'Disc-2 (%)': row.disc2,
         'Disc-3 (%)': row.disc3,
+        'Disc-4 (%)': row.disc4,
         '[ Jumlah Net ]': row.jumlahNet,
         'Notes': row.itemNotes,
       }));
@@ -324,10 +334,8 @@ export const Dashboard = () => {
         <p className="text-gray-500 mt-1">Sinkronisasi DBF, Laporan Bulanan, dan Pencarian Bulk SO.</p>
       </div>
 
-      {/* Top Controls Container */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         
-        {/* Left Panel: Date Range & Sync */}
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <h2 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Mode Laporan Bulanan</h2>
           <div className="flex flex-wrap gap-3 items-end">
@@ -350,7 +358,6 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right Panel: Bulk Search (Paste from Excel) */}
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <h2 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Mode Pencarian Bulk (Picking)</h2>
           <div className="flex gap-3 items-start">
@@ -368,7 +375,6 @@ export const Dashboard = () => {
 
       </div>
 
-      {/* Action Bar & Tabs */}
       <div className="flex justify-between items-center border-b border-gray-200 mb-4">
         <div className="flex">
           <button onClick={() => setActiveTab('detail')} className={`px-6 py-3 font-medium text-sm transition-colors ${activeTab === 'detail' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
@@ -389,7 +395,6 @@ export const Dashboard = () => {
         </div>
       </div>
       
-      {/* DataGrid */}
       {activeTab === 'summary' ? (
         <TableGrid rows={summaryData} columns={summaryColumns} loading={loading || isSyncing} />
       ) : (

@@ -17,9 +17,16 @@ model SalesOrder {
   salesmanCode   String?     @map("salesman_code")     
   notes          String?     @map("notes")             
   
-  // Use Decimal for exact precision in financial data
   subTotal       Decimal     @default(0) @map("sub_total") @db.Decimal(15, 2)
+  
+  // Diskon Global (Header) - 4 Tingkat
   discountAmount Decimal     @default(0) @map("discount_amt") @db.Decimal(15, 2)
+  discountAmt2   Decimal     @default(0) @map("discount_amt2") @db.Decimal(15, 2)
+  headerDisc1    Decimal     @default(0) @map("header_disc1") @db.Decimal(15, 2)
+  headerDisc2    Decimal     @default(0) @map("header_disc2") @db.Decimal(15, 2)
+  headerDisc3    Decimal     @default(0) @map("header_disc3") @db.Decimal(15, 2)
+  headerDisc4    Decimal     @default(0) @map("header_disc4") @db.Decimal(15, 2)
+
   taxPercent     Decimal     @default(0) @map("tax_percent") @db.Decimal(5, 2)
   grandTotal     Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
 
@@ -50,11 +57,11 @@ model OrderItem {
   discount1      Decimal?    @map("discount_1") @db.Decimal(15, 2)
   discount2      Decimal?    @map("discount_2") @db.Decimal(15, 2)
   discount3      Decimal?    @map("discount_3") @db.Decimal(15, 2)
+  discount4      Decimal?    @map("discount_4") @db.Decimal(15, 2) // Jaga-jaga kalau di item juga ada 4
 
   salesOrder     SalesOrder  @relation(fields: [soNumber], references: [soNumber], onDelete: Cascade)
   product        Product     @relation(fields: [productCode], references: [productCode], onDelete: Restrict)
 
-  // Pure relational design using Composite Key
   @@id([soNumber, sequence])
   @@map("order_items")
 }
@@ -68,8 +75,11 @@ model Product {
   aliasName      String?     @map("alias_name")        
   unit           String?     @map("unit")              
   categoryCode   String?     @map("category_code")     
-  
   basePrice      Decimal?    @map("base_price") @db.Decimal(15, 2)
+  
+  // Flag Pengecualian Diskon
+  isJasa         Boolean     @default(false) @map("is_jasa")
+  outDiskon      Boolean     @default(false) @map("out_diskon")
   
   orderItems     OrderItem[]
 
