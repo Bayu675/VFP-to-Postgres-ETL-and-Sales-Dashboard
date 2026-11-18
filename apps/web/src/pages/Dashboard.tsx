@@ -75,6 +75,7 @@ interface SummaryRow {
   discountAmount: number;
   taxPercent: number;
   grandTotal: number;
+  notes: string;
 }
 
 const formatIDR = (value: number) => {
@@ -142,6 +143,7 @@ export const Dashboard = () => {
     { field: 'discountAmount', headerName: 'Diskon SO', type: 'number', width: 150, valueFormatter: (value) => formatIDR(value as number) },
     { field: 'taxPercent', headerName: 'PPN (%)', type: 'number', width: 100 },
     { field: 'grandTotal', headerName: 'Grand Total', type: 'number', width: 180, valueFormatter: (value) => formatIDR(value as number) },
+    { field: 'notes', headerName: 'Keterangan SO', width: 300 },
   ];
 
   const mapDataToRows = (rawData: SalesOrder[]) => {
@@ -202,7 +204,8 @@ export const Dashboard = () => {
       subTotal: Number(order.subTotal),
       discountAmount: Number(order.discountAmount),
       taxPercent: Number(order.taxPercent),
-      grandTotal: Number(order.grandTotal)
+      grandTotal: Number(order.grandTotal),
+      notes: order.notes || '-',
     }));
 
     setDetailData(flattenedRows);
@@ -296,6 +299,7 @@ export const Dashboard = () => {
         'Diskon SO': row.discountAmount,
         'PPN (%)': row.taxPercent,
         'Grand Total': row.grandTotal,
+        'Keterangan SO': row.notes,
       }));
 
       const excelDetail = detailData.map((row) => ({

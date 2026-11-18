@@ -12,6 +12,7 @@ data-dropzone/
 .env.test.local
 .env.production.local
 
+
 # NODE & DEPENDENCIES
 node_modules/
 npm-debug.log*

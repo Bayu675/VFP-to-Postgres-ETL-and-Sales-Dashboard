@@ -73,6 +73,7 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
     { header: 'Diskon SO', key: 'discountAmount', width: 20 },
     { header: 'PPN (%)', key: 'taxPercent', width: 15 },
     { header: 'Grand Total', key: 'grandTotal', width: 20 },
+    { header: 'Keterangan SO', key: 'notes', width: 35 },
   ];
 
   const detailSheet = workbook.addWorksheet('Detail Item');
@@ -108,6 +109,7 @@ export const exportSalesOrders = asyncHandler(async (req: Request, res: Response
       discountAmount: Number(order.discountAmount),
       taxPercent: Number(order.taxPercent),
       grandTotal: Number(order.grandTotal),
+      notes: order.notes || '-',
     });
 
     order.items.forEach(item => {
